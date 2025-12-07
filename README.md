@@ -70,7 +70,9 @@ const std::string VERSION
 const std::string PUBLIC_KEY_PEM
 ```
 
-# ⚙️ 配置说明
+---
+
+# 🚀 使用示例
 
 ```cpp
 KeyAuth::Init();
@@ -97,9 +99,13 @@ else
 }
 ``` 
 
+---
+
 #  📝 License
 你可以自由修改并集成本项目到你的授权系统中。
 如用于商业用途，请确保你了解相关法律法规。
+
+---
 
 #  ⭐ 鸣谢
 
@@ -112,3 +118,5 @@ nlohmann/json
 VMProtect
 
 skCrypt
+
+---
