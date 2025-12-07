@@ -1,0 +1,48 @@
+本项目使用 OpenSSL、libcurl、nlohmann-json 作为依赖库
+
+------------------------------------
+一、如果你的系统已经安装 vcpkg（推荐）
+------------------------------------
+
+只需运行以下命令即可自动安装并配置依赖库：
+
+    vcpkg install openssl:x64-windows
+    vcpkg install curl:x64-windows
+    vcpkg install nlohmann-json
+
+安装完成后，请确保你的 Visual Studio 项目启用了 vcpkg 集成：
+
+    vcpkg integrate install
+
+然后重新生成项目文件即可
+
+------------------------------------
+二、如果你没有安装 vcpkg
+------------------------------------
+
+1. 安装 vcpkg：
+
+在任意目录执行：
+
+    git clone https://github.com/microsoft/vcpkg
+    cd vcpkg
+    bootstrap-vcpkg.bat
+
+2. 设置 VS 自动集成：
+
+    vcpkg integrate install
+
+3. 使用 vcpkg 安装依赖：
+
+    vcpkg install openssl:x64-windows
+    vcpkg install curl:x64-windows
+    vcpkg install nlohmann-json
+
+
+------------------------------------
+三、验证是否安装成功
+------------------------------------
+
+重新生成工程，如果不再出现找不到 OpenSSL / CURL / JSON 的错误，则说明安装成功。
+
+------------------------------------
