@@ -1,0 +1,11 @@
+编译后
+一般情况下，除了VMProtectSDK64.dll以外，还需要libcrypto-3-x64.dll，libcurl.dll，zlib1.dll
+这时候就用到了VMProtect了
+
+您可以在任何地方下载到VMProtect，包括但不仅限于您自己的正版，网上的泄露版等
+打开VMProtect，把编译好的程序拖到VMProtect内，比如默认的C++Dome，编译后就是ClientCpp.exe
+
+在VMProtect的工程选项您，找到文件，添加文件，选中编译后需要携带的三个dll文件，点击打开，确保三个文件出现在文件列表即可
+
+这时候点击VMProtect的三角，也就是编译按钮，等待编译完毕即可
+编译出来的ClientCpp.vmp.exe可以直接分享给其他人，无需额外携带dll
