@@ -161,13 +161,47 @@ namespace Tools
     {
         // UTF8 -> GBK
         std::string utf8_to_gbk(const std::string& utf8) {
+            if (utf8.empty()) {
+                return "No Result";
+            }
+            const UINT targetCP = 936;
             int wlen = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, nullptr, 0);
-            std::wstring wstr(wlen, 0);
-            MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, &wstr[0], wlen);
-            int len = WideCharToMultiByte(936, 0, wstr.c_str(), -1, nullptr, 0, nullptr, nullptr);
-            std::string gbk(len, 0);
-            WideCharToMultiByte(936, 0, wstr.c_str(), -1, &gbk[0], len, nullptr, nullptr);
-            return gbk;
+            if (wlen <= 0) {
+                return "No Result";
+            }
+            std::vector<wchar_t> wstr(wlen);
+            if (MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, wstr.data(), wlen) == 0) {
+                return "No Result";
+            }
+            int len = WideCharToMultiByte(targetCP, 0, wstr.data(), -1, nullptr, 0, nullptr, nullptr);
+            if (len <= 0) {
+                return "No Result";
+            }
+            std::vector<char> gbk(len);
+            if (WideCharToMultiByte(targetCP, 0, wstr.data(), -1, gbk.data(), len, nullptr, nullptr) == 0) {
+                return "No Result";
+            }
+            if (len > 0 && gbk[len - 1] == '\0') {
+                return std::string(gbk.data(), len - 1);
+            }
+            return std::string(gbk.data(), len);
+        }
+
+		// GBK -> UTF8
+        std::string gbk_to_utf8(const std::string& gbk) {
+            if (gbk.empty()) return "";
+            int wlen = MultiByteToWideChar(CP_ACP, 0, gbk.c_str(), -1, nullptr, 0);
+            if (wlen <= 0) return "";
+            std::vector<wchar_t> wstr(wlen);
+            MultiByteToWideChar(CP_ACP, 0, gbk.c_str(), -1, wstr.data(), wlen);
+            int len = WideCharToMultiByte(CP_UTF8, 0, wstr.data(), -1, nullptr, 0, nullptr, nullptr);
+            if (len <= 0) return "";
+            std::vector<char> utf8(len);
+            WideCharToMultiByte(CP_UTF8, 0, wstr.data(), -1, utf8.data(), len, nullptr, nullptr);
+            if (len > 0 && utf8[len - 1] == '\0') {
+                return std::string(utf8.data(), len - 1);
+            }
+            return std::string(utf8.data(), len);
         }
     }
 
@@ -478,7 +512,10 @@ namespace KeyAuth
 
         json inner = req_data;
         inner["timestamp"] = Tools::System::get_timestamp();
-        inner["nonce"] = Tools::System::gen_nonce();
+
+        // 生成本次请求的Nonce
+        std::string current_nonce = Tools::System::gen_nonce();
+        inner["nonce"] = current_nonce;
 
         std::string data_hex, iv_hex;
         if (!encrypt_payload(inner, data_hex, iv_hex))
@@ -536,8 +573,28 @@ namespace KeyAuth
             }
         }
 
+        // 解密响应数据
+        json decrypted_data = decrypt_payload(resp["data"], resp.contains("iv") ? resp["iv"] : "");
+
+        if (decrypted_data.is_null()) {
+            VMProtectEnd();
+            return nullptr;
+        }
+
+		// 验证发包与回包的 Nonce 是否匹配，防止重放攻击
+        if (!decrypted_data.contains("nonce") || decrypted_data["nonce"] != current_nonce)
+        {
+            std::cout << skCrypt("   [严重安全警告] 遭到重放攻击！Nonce 不匹配！\n").decrypt();
+
+            Tools::AntiDebug::SecureAbort();
+
+            VMProtectEnd();
+            return nullptr;
+        }
+        // ========================================================
+
         VMProtectEnd();
-        return decrypt_payload(resp["data"], resp.contains("iv") ? resp["iv"] : "");
+        return decrypted_data;
     }
 
     // 登录
@@ -624,7 +681,20 @@ namespace KeyAuth
             return 0;
         }
 
-        token = res["next_token"];
+        std::string server_next_token = res["next_token"];
+
+        //防止重放攻击
+        if (server_next_token == token)
+        {
+            std::cout << skCrypt("   [严重安全警告] 检测到重放攻击！Token 未刷新！\n").decrypt();
+
+            Tools::AntiDebug::SecureAbort(); 
+
+            VMProtectEnd();
+            return 0;
+        }
+
+        token = server_next_token;
 
         long long server_time = res["server_time"];
         std::cout << skCrypt("   [心跳]  心跳成功，服务器时间戳: ").decrypt()
@@ -686,43 +756,52 @@ namespace KeyAuth
     }
 }
 
-
 int main()
 {
     KeyAuth::Init();
 
     std::cout << skCrypt("   [验证] 请输入卡密：").decrypt();
-    std::string key;
-    std::getline(std::cin, key);
 
-	//仅演示反调试，实际项目请根据需要自行调整反调试策略，并且自行完善反调试逻辑
-    if (Tools::AntiDebug::Check())
-    {
+    std::string key_gbk;
+    std::getline(std::cin, key_gbk);
+
+    std::string key_utf8 = Tools::Text::gbk_to_utf8(key_gbk);
+
+    //仅演示反调试，实际项目请根据需要自行调整反调试策略，并且自行完善反调试逻辑 
+    if (Tools::AntiDebug::Check()) {
         Tools::AntiDebug::SecureAbort();
+        return 0;
     }
 
-    if (KeyAuth::Login(key))
+    if (KeyAuth::Login(key_utf8))
     {
-		std::string v = KeyAuth::GetVar("变量名");//修改为你后台创建的变量名
-        std::cout << skCrypt("   [远程变量] 变量 = ").decrypt()
-            << Tools::Text::utf8_to_gbk(v) << "\n";
+        std::string var_value_utf8 = KeyAuth::GetVar("test");//修改为你后台创建的变量名 请使用非中文防止编码问题
 
-        // ⚠ 此处仅演示在独立线程里做心跳：
-        //   实际项目建议把心跳逻辑合并到主循环 / 业务线程中，
-        //   避免心跳线程被单独挂起调试。
-        KeyAuth::StartKeepAlive(60000);
+        if (var_value_utf8.empty()) {
+            std::cout << skCrypt("   [远程变量] 获取失败.\n").decrypt();
+        }
+        else {
+            std::string var_show = Tools::Text::utf8_to_gbk(var_value_utf8);
+            std::cout << skCrypt("   [远程变量] 变量 =  ").decrypt() << var_show << "\n";
+        }
+
+        //  此处仅演示在独立线程里做心跳：
+
+        //  实际项目建议把心跳逻辑合并到主循环 / 业务线程中
+
+        //  避免心跳线程被单独挂起调试。 
+        KeyAuth::StartKeepAlive(6000);
 
         std::cout << skCrypt("   [验证] 按下回车退出...\n").decrypt();
         std::cin.get();
 
-		// 停止心跳线程
         KeyAuth::StopKeepAlive();
     }
     else
     {
         std::cout << skCrypt("   [验证] 登录失败。\n").decrypt();
     }
-    system("pause");
 
+    system("pause");
     return 0;
 }
