@@ -864,20 +864,15 @@ namespace KeyAuth
 
         std::string server_next_token = res["next_token"].get<std::string>();
 
-        // 防重放
-        if (server_next_token == token)
-        {
-            std::cout << skCrypt("   [严重安全警告] 检测到重放攻击！Token 未刷新！\n").decrypt();
-            Tools::AntiDebug::SecureAbort();
-            VMProtectEnd();
-            return 0;
-        }
-
         token = server_next_token;
 
         long long server_time = res.contains("server_time") ? res["server_time"].get<long long>() : 0;
-        std::cout << skCrypt("   [心跳]  心跳成功，服务器时间戳: ").decrypt()
-            << server_time << "\n";
+
+        std::cout << skCrypt("   [心跳]  心跳成功 | token=").decrypt()
+            << token
+            << skCrypt(" | server_time=").decrypt()
+            << server_time
+            << "\n";
 
         VMProtectEnd();
         return 1;
