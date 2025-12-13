@@ -5,7 +5,7 @@
 
 该示例中的逻辑包括：
 
-- ✔ AES-CBC 数据加密（PKCS7 Padding）  
+- ✔ AES-GCM 数据加密
 - ✔ RSA-SHA256 服务端签名验证  
 - ✔ Curl HTTP 请求  
 - ✔ HWID 绑定（MAC 或 ComputerName → MD5）  
@@ -22,7 +22,7 @@
 # 📦 功能特性
 
 ### 🔐 加密通信  
-所有请求使用 AES-CBC 加密。  
+所有请求使用 AES-GCM 加密。  
 响应采用 RSA-SHA256 验签，确保数据未被篡改。
 
 ### 🖥 HWID 绑定  
