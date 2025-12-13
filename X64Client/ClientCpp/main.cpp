@@ -44,13 +44,13 @@
 using json = nlohmann::json;
 
 // ============================================================
-// 服务器连接配置开始 请从作者管理后台获取软件相应配置
+// 服务器连接配置开始  请从作者后台 软件管理 操作按钮 那边获取相应配置 Py就是复制Python配置 C++就是复制C++配置
 // ============================================================
 // C++ 配置
-const std::string API_URL = skCrypt("http://127.0.0.1:8080").decrypt();
-const uint32_t AUTHOR_ID = 31;
-const uint32_t SOFTWARE_ID = 22;
-const std::string SECRET_KEY = skCrypt("3ef3f0ce16e92d0ad526fc7d24bcf1d3").decrypt();
+const std::string API_URL = skCrypt("https://mdfackserver.feixiaokeyauth.top").decrypt();
+const uint32_t AUTHOR_ID = 2;
+const uint32_t SOFTWARE_ID = 4;
+const std::string SECRET_KEY = skCrypt("d6184a408d1564bbb65a1381994829a3").decrypt();
 const std::string VERSION = skCrypt("1.0").decrypt();
 
 // 安全配置
@@ -59,7 +59,7 @@ const std::string VERSION = skCrypt("1.0").decrypt();
 
 // RSA 公钥
 const std::string PUBLIC_KEY_PEM =
-skCrypt("-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwL1HFzFAt1ar9jF/Q1VQ\n40A+byJh/tjekJUBgOV6CpOinSYVI2LEVq6aP8y17Qr9OFafdq69Awkx7ceueYcA\nuxlwuMa9/7vKWcMu4kKEcth4Kuec1KNGzCfbWGO/dszQCFX2E0lfxUCB6REcF7sh\nue5KitjIkcd07XWvPa6hR7qlW7nTMRWvCB0B812c89F3/2u42OgP57KDGjuKnZHm\nBoJvttFkUI4VsBFMYrbjfNBuUaTWMQXZRlseyKdp9jQtQ653euXoZroQSooURA+f\n/0jqxQ7Zk2OjYK6rIkP5SX+bMAM0h7qq/w76EbwQsbF9RuSJz0857+fpbKZUiU0R\nLQIDAQAB\n-----END PUBLIC KEY-----\n").decrypt();
+skCrypt("-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2nROnFwGhZdOMWA4zWMT\nb+T6WZIVfmR7VOHzZe8GRcf+CZqEPt1ZH1gXrDWiJ9d9aeCk99XTqSti3kiEqo1d\nWvUBmf0dwnruOlJusiyXOu/EWDFOkcvAAWePIRxxLQ92Y2Sh+TttKmYVvsz2/E6Q\n3SsffuxDvU07bZe9nfGb9BoplAjQmbhgQ8iLL47h1pGWJR3rutYtXkhFlheqQmkC\n1qRASIRcPZw5oLB5qNWdurwLrmt+LBo0xnUa/+7AcoxyXgGYUAF8wHZ4gqwaYMow\njVa/pquDqi5dMKR2Pdno0VLno2r9747yinVzw5N7kP1KO1GRjvBgd3d5WZOMoFBg\ntwIDAQAB\n-----END PUBLIC KEY-----\n").decrypt();
 
 // ============================================================
 // 服务器连接配置结束
@@ -104,7 +104,7 @@ namespace Tools
     }
 
     // ============================================================
-    // 系统级工具
+    // 系统工具
     // ============================================================
     namespace System
     {
@@ -210,72 +210,125 @@ namespace Tools
     // ============================================================
     namespace Crypto
     {
-        // PKCS7 填充
-        std::vector<unsigned char> pkcs7_pad(const std::vector<unsigned char>& data) {
-            size_t padLen = 16 - (data.size() % 16);
-            std::vector<unsigned char> out = data;
-            out.insert(out.end(), padLen, (unsigned char)padLen);
-            return out;
+        static std::string build_aad()
+        {
+            return "author=" + std::to_string(AUTHOR_ID) +
+                "|software=" + std::to_string(SOFTWARE_ID);
         }
 
-        // PKCS7 去填充
-        std::vector<unsigned char> pkcs7_unpad(const std::vector<unsigned char>& data) {
-            if (data.empty()) return {};
-            unsigned char pad = data.back();
-            if (pad == 0 || pad > data.size()) return {};
-            return std::vector<unsigned char>(data.begin(), data.end() - pad);
-        }
 
-        // AES CBC 加/解密
-        bool aes_cbc_crypt(
-            bool encrypt,
-            const std::vector<unsigned char>& in,
+        bool aes_gcm_encrypt(
+            const std::vector<unsigned char>& plaintext,
             const std::vector<unsigned char>& key,
-            std::vector<unsigned char>& iv,
+            std::vector<unsigned char>& nonce,
             std::vector<unsigned char>& out
         ) {
-            VMProtectBeginUltra("AES");
+            const std::string aad = build_aad();
 
             EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-            if (!ctx) {
-                VMProtectEnd();
-                return false;
-            }
+            if (!ctx) return false;
 
-            const EVP_CIPHER* cipher = EVP_aes_128_cbc();
-            if (key.size() == 32) cipher = EVP_aes_256_cbc();
+            const EVP_CIPHER* cipher = nullptr;
+            if (key.size() == 16) cipher = EVP_aes_128_gcm();
+            else if (key.size() == 32) cipher = EVP_aes_256_gcm();
+            else { EVP_CIPHER_CTX_free(ctx); return false; }
 
-            if (encrypt) {
-                iv.resize(16); RAND_bytes(iv.data(), 16);
-                EVP_EncryptInit_ex(ctx, cipher, nullptr, key.data(), iv.data());
-                EVP_CIPHER_CTX_set_padding(ctx, 0);
+            nonce.resize(12);
+            RAND_bytes(nonce.data(), (int)nonce.size());
 
-                std::vector<unsigned char> padded = pkcs7_pad(in);
-                out.resize(padded.size() + 16);
+            int len = 0, ciphertext_len = 0;
+            int tmp = 0;
 
-                int len1, len2;
-                EVP_EncryptUpdate(ctx, out.data(), &len1, padded.data(), (int)padded.size());
-                EVP_EncryptFinal_ex(ctx, out.data() + len1, &len2);
-                out.resize(len1 + len2);
-            }
-            else {
-                EVP_DecryptInit_ex(ctx, cipher, nullptr, key.data(), iv.data());
-                EVP_CIPHER_CTX_set_padding(ctx, 0);
+            if (EVP_EncryptInit_ex(ctx, cipher, nullptr, nullptr, nullptr) != 1) goto err;
+            if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, (int)nonce.size(), nullptr) != 1) goto err;
+            if (EVP_EncryptInit_ex(ctx, nullptr, nullptr, key.data(), nonce.data()) != 1) goto err;
 
-                out.resize(in.size() + 16);
-                int len1, len2;
+            if (EVP_EncryptUpdate(ctx, nullptr, &tmp,
+                reinterpret_cast<const unsigned char*>(aad.data()),
+                (int)aad.size()) != 1) goto err;
 
-                EVP_DecryptUpdate(ctx, out.data(), &len1, in.data(), (int)in.size());
-                EVP_DecryptFinal_ex(ctx, out.data() + len1, &len2);
-                out.resize(len1 + len2);
+            out.resize(plaintext.size());
 
-                out = pkcs7_unpad(out);
-            }
+            if (EVP_EncryptUpdate(ctx, out.data(), &len,
+                plaintext.data(), (int)plaintext.size()) != 1) goto err;
+
+            ciphertext_len = len;
+
+            if (EVP_EncryptFinal_ex(ctx, out.data() + len, &len) != 1) goto err;
+            ciphertext_len += len;
+
+            unsigned char tag[16];
+            if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag) != 1) goto err;
+
+            out.resize(ciphertext_len);
+            out.insert(out.end(), tag, tag + 16);
 
             EVP_CIPHER_CTX_free(ctx);
-            VMProtectEnd();
             return true;
+
+        err:
+            EVP_CIPHER_CTX_free(ctx);
+            return false;
         }
+
+
+        bool aes_gcm_decrypt(
+            const std::vector<unsigned char>& data,
+            const std::vector<unsigned char>& key,
+            const std::vector<unsigned char>& nonce,
+            std::vector<unsigned char>& out_plain
+        ) {
+            if (nonce.size() != 12 || data.size() < 16) return false;
+
+            const std::string aad = build_aad();
+
+            EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+            if (!ctx) return false;
+
+            const EVP_CIPHER* cipher = nullptr;
+            if (key.size() == 16) cipher = EVP_aes_128_gcm();
+            else if (key.size() == 32) cipher = EVP_aes_256_gcm();
+            else { EVP_CIPHER_CTX_free(ctx); return false; }
+
+            const size_t cipher_len = data.size() - 16;
+            const unsigned char* tag = data.data() + cipher_len;
+
+            int len = 0, plain_len = 0;
+            int tmp = 0;
+
+            if (EVP_DecryptInit_ex(ctx, cipher, nullptr, nullptr, nullptr) != 1) goto err;
+            if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, (int)nonce.size(), nullptr) != 1) goto err;
+            if (EVP_DecryptInit_ex(ctx, nullptr, nullptr, key.data(), nonce.data()) != 1) goto err;
+
+            if (EVP_DecryptUpdate(ctx, nullptr, &tmp,
+                reinterpret_cast<const unsigned char*>(aad.data()),
+                (int)aad.size()) != 1) goto err;
+
+            out_plain.resize(cipher_len);
+
+            if (EVP_DecryptUpdate(ctx, out_plain.data(), &len,
+                data.data(), (int)cipher_len) != 1) goto err;
+
+            plain_len = len;
+
+            if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, 16, (void*)tag) != 1) goto err;
+
+            if (EVP_DecryptFinal_ex(ctx, out_plain.data() + len, &len) != 1) goto err;
+
+            plain_len += len;
+            out_plain.resize(plain_len);
+
+            EVP_CIPHER_CTX_free(ctx);
+            return true;
+
+        err:
+            EVP_CIPHER_CTX_free(ctx);
+            return false;
+        }
+
+
+
+
     }
 
     // ============================================================
@@ -372,7 +425,7 @@ namespace Tools
             curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_cb);
             curl_easy_setopt(curl, CURLOPT_WRITEDATA, &resp);
-            curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
+            curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
 
             CURLcode code = curl_easy_perform(curl);
 
@@ -428,6 +481,17 @@ namespace KeyAuth
     static std::atomic<bool> running{ false };
     static std::thread      th_main;
 
+    // 上次登录用的卡密
+    static std::string g_last_license;
+    // 重连失败原因
+    static std::string g_last_error;
+    // 防止心跳线程并发重登
+    static std::mutex g_relogin_mtx;
+    static bool is_token_error(const std::string& err)
+    {
+        return (err.find("invalid token") != std::string::npos) ;
+    }
+
     // 初始化
     bool Init()
     {
@@ -455,15 +519,17 @@ namespace KeyAuth
         }
 
         // AES 模式
-        std::vector<unsigned char> iv, cipher;
-        if (!Tools::Crypto::aes_cbc_crypt(true, bin, secret_key_bytes, iv, cipher))
+        std::vector<unsigned char> nonce, cipher;
+        if (!Tools::Crypto::aes_gcm_encrypt(bin, secret_key_bytes, nonce, cipher))
         {
             VMProtectEnd();
             return false;
         }
 
+
         out_data = Tools::Encoding::to_hex(cipher);
-        out_iv = Tools::Encoding::to_hex(iv);
+        out_iv = Tools::Encoding::to_hex(nonce);
+
 
         VMProtectEnd();
         return true;
@@ -484,18 +550,18 @@ namespace KeyAuth
             }
 
             // AES 模式
-            std::vector<unsigned char> cipher = Tools::Encoding::from_hex(data_hex);
-            std::vector<unsigned char> iv = Tools::Encoding::from_hex(iv_hex);
-            std::vector<unsigned char> bin;
+            std::vector<unsigned char> data = Tools::Encoding::from_hex(data_hex);
+            std::vector<unsigned char> nonce = Tools::Encoding::from_hex(iv_hex);
+            std::vector<unsigned char> plain;
 
-            if (!Tools::Crypto::aes_cbc_crypt(false, cipher, secret_key_bytes, iv, bin))
+            if (!Tools::Crypto::aes_gcm_decrypt(data, secret_key_bytes, nonce, plain))
             {
                 VMProtectEnd();
                 return nullptr;
             }
 
             VMProtectEnd();
-            return json::parse(std::string(bin.begin(), bin.end()));
+            return json::parse(std::string(plain.begin(), plain.end()));
         }
         catch (...)
         {
@@ -510,92 +576,155 @@ namespace KeyAuth
     {
         VMProtectBegin("SendRequest");
 
-        json inner = req_data;
-        inner["timestamp"] = Tools::System::get_timestamp();
+        constexpr int MAX_RETRY = 3;
+        g_last_error.clear();
 
-        // 生成本次请求的Nonce
-        std::string current_nonce = Tools::System::gen_nonce();
-        inner["nonce"] = current_nonce;
-
-        std::string data_hex, iv_hex;
-        if (!encrypt_payload(inner, data_hex, iv_hex))
+        for (int attempt = 1; attempt <= MAX_RETRY; ++attempt)
         {
-            std::cout << skCrypt("   [请求]  加密失败\n").decrypt();
-            VMProtectEnd();
-            return nullptr;
-        }
+            json inner = req_data;
+            inner["timestamp"] = Tools::System::get_timestamp();
 
-        json payload = {
-            {"author_id",   AUTHOR_ID},
-            {"software_id", SOFTWARE_ID},
-            {"data",        data_hex},
-            {"iv",          iv_hex},
-            {"signature",   ""}
-        };
+            // 防重放攻击
+            std::string current_nonce = Tools::System::gen_nonce();
+            inner["nonce"] = current_nonce;
 
-        std::string resp_str = Tools::Network::http_post(API_URL + endpoint, payload.dump());
-        if (resp_str.empty())
-        {
-            std::cout << skCrypt("   [请求]  网络失败\n").decrypt();
-            VMProtectEnd();
-            return nullptr;
-        }
-
-        json resp;
-        try {
-            resp = json::parse(resp_str);
-        }
-        catch (...) {
-            std::cout << skCrypt("   [请求]  响应 JSON 解析失败\n").decrypt();
-            VMProtectEnd();
-            return nullptr;
-        }
-
-        if (resp.contains("error"))
-        {
-            std::cout << skCrypt("   [请求] 登录失败,服务器返回：").decrypt() << resp["error"] << "\n";
-            VMProtectEnd();
-            return nullptr;
-        }
-
-        // 验签
-        if (USE_SIGNATURE)
-        {
-            if (!Tools::Signature::verify_signature(
-                resp["data"],
-                resp.contains("iv") ? resp["iv"] : "",
-                resp["server_time"],
-                resp["sign"]))
+            std::string data_hex, iv_hex;
+            if (!encrypt_payload(inner, data_hex, iv_hex))
             {
-                std::cout << skCrypt("   [请求]  签名校验失败\n").decrypt();
+                g_last_error = "encrypt failed";
+                std::cout << skCrypt("   [请求]  加密失败\n").decrypt();
                 VMProtectEnd();
                 return nullptr;
             }
-        }
 
-        // 解密响应数据
-        json decrypted_data = decrypt_payload(resp["data"], resp.contains("iv") ? resp["iv"] : "");
+            json payload = {
+                {"author_id",   AUTHOR_ID},
+                {"software_id", SOFTWARE_ID},
+                {"data",        data_hex},
+                {"iv",          iv_hex},
+                {"signature",   ""}
+            };
 
-        if (decrypted_data.is_null()) {
+            std::string resp_str = Tools::Network::http_post(
+                API_URL + endpoint,
+                payload.dump()
+            );
+
+            // 网络失败 → 重试
+            if (resp_str.empty())
+            {
+                g_last_error = "network error";
+                std::cout << skCrypt("   [请求]  网络失败").decrypt()
+                    << " (" << attempt << "/" << MAX_RETRY << ")\n";
+
+                if (attempt < MAX_RETRY)
+                {
+                    Sleep(30000);
+                    continue;
+                }
+
+                VMProtectEnd();
+                return nullptr;
+            }
+
+            json resp;
+            try
+            {
+                resp = json::parse(resp_str);
+            }
+            catch (...)
+            {
+                g_last_error = "json parse failed";
+                std::cout << skCrypt("   [请求]  响应 JSON 解析失败\n").decrypt();
+                VMProtectEnd();
+                return nullptr;
+            }
+
+            // 服务端返回错误
+            if (resp.contains("error"))
+            {
+                try {
+                    g_last_error = resp["error"].get<std::string>();
+                }
+                catch (...) {
+                    g_last_error = "server error";
+                }
+
+                std::cout << skCrypt("   [请求] 服务器返回错误：").decrypt()
+                    << g_last_error << "\n";
+
+                VMProtectEnd();
+                return nullptr;
+            }
+
+            // 基本字段检查
+            if (!resp.contains("data"))
+            {
+                g_last_error = "protocol missing data";
+                std::cout << skCrypt("   [请求]  协议错误：缺少 data 字段\n").decrypt();
+                VMProtectEnd();
+                return nullptr;
+            }
+
+            // 验签
+            if (USE_SIGNATURE)
+            {
+                if (!resp.contains("sign"))
+                {
+                    g_last_error = "protocol missing sign";
+                    std::cout << skCrypt("   [请求]  协议错误：缺少 sign 字段\n").decrypt();
+                    VMProtectEnd();
+                    return nullptr;
+                }
+
+                if (!Tools::Signature::verify_signature(
+                    resp["data"],
+                    resp.contains("iv") ? resp["iv"] : "",
+                    resp.contains("server_time") ? resp["server_time"].get<long long>() : 0,
+                    resp["sign"]))
+                {
+                    g_last_error = "signature verify failed";
+                    std::cout << skCrypt("   [请求]  签名校验失败\n").decrypt();
+                    VMProtectEnd();
+                    return nullptr;
+                }
+            }
+
+            // 解密
+            json decrypted_data = decrypt_payload(
+                resp["data"],
+                resp.contains("iv") ? resp["iv"] : ""
+            );
+
+            if (decrypted_data.is_null())
+            {
+                g_last_error = "decrypt failed";
+                VMProtectEnd();
+                return nullptr;
+            }
+
+            // 防重放检验
+            if (!decrypted_data.contains("nonce") ||
+                decrypted_data["nonce"] != current_nonce)
+            {
+                g_last_error = "nonce mismatch";
+                std::cout << skCrypt("   [严重安全警告] 遭到重放攻击！Nonce 不匹配！\n").decrypt();
+
+                Tools::AntiDebug::SecureAbort();
+                VMProtectEnd();
+                return nullptr;
+            }
+
+            g_last_error.clear();
             VMProtectEnd();
-            return nullptr;
+            return decrypted_data;
         }
-
-		// 验证发包与回包的 Nonce 是否匹配，防止重放攻击
-        if (!decrypted_data.contains("nonce") || decrypted_data["nonce"] != current_nonce)
-        {
-            std::cout << skCrypt("   [严重安全警告] 遭到重放攻击！Nonce 不匹配！\n").decrypt();
-
-            Tools::AntiDebug::SecureAbort();
-
-            VMProtectEnd();
-            return nullptr;
-        }
-        // ========================================================
 
         VMProtectEnd();
-        return decrypted_data;
+        return nullptr;
     }
+
+
 
     // 登录
     bool Login(const std::string& license)
@@ -615,8 +744,17 @@ namespace KeyAuth
             return false;
         }
 
-        session_id = res["session_id"];
-        token = res["token"];
+        if (!res.contains("session_id") || !res.contains("token"))
+        {
+            std::cout << skCrypt("   [验证] 登录响应缺少 session_id/token\n").decrypt();
+            VMProtectEnd();
+            return false;
+        }
+
+        session_id = res["session_id"].get<std::string>();
+        token = res["token"].get<std::string>();
+
+        g_last_license = license;
 
         std::cout << skCrypt("   [验证] 登录成功！\n").decrypt();
 
@@ -627,7 +765,7 @@ namespace KeyAuth
                 << Tools::Text::utf8_to_gbk(ann) << "\n";
         }
 
-        // === 版本检查 ===
+        // 版本检查
         std::string localVer = VERSION;
         std::string cloudVer = res.contains("latest_version")
             ? res["latest_version"].get<std::string>()
@@ -654,7 +792,6 @@ namespace KeyAuth
             localtime_s(&ti, &t);
             char buf[64]{};
             std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &ti);
-
             std::cout << skCrypt("   [到期]: ").decrypt() << buf << "\n";
         }
 
@@ -674,29 +811,71 @@ namespace KeyAuth
 
         json res = send_request("/api/client/heartbeat", req);
 
+        // 检查是不是 token 错误
         if (res.is_null())
         {
-            std::cout << skCrypt("   [心跳]  心跳失败\n").decrypt();
+            // token 错误 自动重登一次 再心跳一次
+            if (is_token_error(g_last_error) && !g_last_license.empty())
+            {
+                std::lock_guard<std::mutex> lk(g_relogin_mtx);
+
+                std::cout << skCrypt("   [心跳] token 异常，尝试重新登录...\n").decrypt();
+
+                if (Login(g_last_license))
+                {
+                    std::cout << skCrypt("   [心跳] 重登成功，重试心跳...\n").decrypt();
+
+                    json req2 = {
+                        {"session_id", session_id},
+                        {"token",      token}
+                    };
+
+                    json res2 = send_request("/api/client/heartbeat", req2);
+                    if (res2.is_null())
+                    {
+                        std::cout << skCrypt("   [心跳] 重登后心跳仍失败\n").decrypt();
+                        VMProtectEnd();
+                        return 0;
+                    }
+
+                    res = res2;
+                }
+                else
+                {
+                    std::cout << skCrypt("   [心跳] 重登失败\n").decrypt();
+                    VMProtectEnd();
+                    return 0;
+                }
+            }
+            else
+            {
+                std::cout << skCrypt("   [心跳]  心跳失败\n").decrypt();
+                VMProtectEnd();
+                return 0;
+            }
+        }
+
+        if (!res.contains("next_token"))
+        {
+            std::cout << skCrypt("   [心跳]  协议错误：缺少 next_token\n").decrypt();
             VMProtectEnd();
             return 0;
         }
 
-        std::string server_next_token = res["next_token"];
+        std::string server_next_token = res["next_token"].get<std::string>();
 
-        //防止重放攻击
+        // 防重放
         if (server_next_token == token)
         {
             std::cout << skCrypt("   [严重安全警告] 检测到重放攻击！Token 未刷新！\n").decrypt();
-
-            Tools::AntiDebug::SecureAbort(); 
-
+            Tools::AntiDebug::SecureAbort();
             VMProtectEnd();
             return 0;
         }
 
         token = server_next_token;
 
-        long long server_time = res["server_time"];
+        long long server_time = res.contains("server_time") ? res["server_time"].get<long long>() : 0;
         std::cout << skCrypt("   [心跳]  心跳成功，服务器时间戳: ").decrypt()
             << server_time << "\n";
 
@@ -729,7 +908,7 @@ namespace KeyAuth
         return v;
     }
 
-    // 保持心跳（独立线程示例）
+    // 保持心跳
     void StartKeepAlive(int interval_ms)
     {
         if (running.load()) return;
@@ -789,8 +968,10 @@ int main()
 
         //  实际项目建议把心跳逻辑合并到主循环 / 业务线程中
 
-        //  避免心跳线程被单独挂起调试。 
-        KeyAuth::StartKeepAlive(6000);
+        //  避免心跳线程被单独挂起调试。
+
+		//  心跳间隔建议设置为 30 秒以上，防止被Cloudflare拉黑。
+        KeyAuth::StartKeepAlive(30000);
 
         std::cout << skCrypt("   [验证] 按下回车退出...\n").decrypt();
         std::cin.get();
