@@ -47,10 +47,10 @@ using json = nlohmann::json;
 // 服务器连接配置开始  请从作者后台 软件管理 操作按钮 那边获取相应配置 Py就是复制Python配置 C++就是复制C++配置
 // ============================================================
 // C++ 配置
-const std::string API_URL = skCrypt("https://mdfackserver.feixiaokeyauth.top").decrypt();
+const std::string API_URL = skCrypt("https://feixiaokeyauth.top").decrypt();
 const uint32_t AUTHOR_ID = 2;
-const uint32_t SOFTWARE_ID = 4;
-const std::string SECRET_KEY = skCrypt("d6184a408d1564bbb65a1381994829a3").decrypt();
+const uint32_t SOFTWARE_ID = 1;
+const std::string SECRET_KEY = skCrypt("c3a05165514d51d0ad86dc7ff4e05a44").decrypt();
 const std::string VERSION = skCrypt("1.0").decrypt();
 
 // 安全配置
@@ -59,7 +59,7 @@ const std::string VERSION = skCrypt("1.0").decrypt();
 
 // RSA 公钥
 const std::string PUBLIC_KEY_PEM =
-skCrypt("-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2nROnFwGhZdOMWA4zWMT\nb+T6WZIVfmR7VOHzZe8GRcf+CZqEPt1ZH1gXrDWiJ9d9aeCk99XTqSti3kiEqo1d\nWvUBmf0dwnruOlJusiyXOu/EWDFOkcvAAWePIRxxLQ92Y2Sh+TttKmYVvsz2/E6Q\n3SsffuxDvU07bZe9nfGb9BoplAjQmbhgQ8iLL47h1pGWJR3rutYtXkhFlheqQmkC\n1qRASIRcPZw5oLB5qNWdurwLrmt+LBo0xnUa/+7AcoxyXgGYUAF8wHZ4gqwaYMow\njVa/pquDqi5dMKR2Pdno0VLno2r9747yinVzw5N7kP1KO1GRjvBgd3d5WZOMoFBg\ntwIDAQAB\n-----END PUBLIC KEY-----\n").decrypt();
+skCrypt("-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsqArxmtuGwDTPuGJd6MK\n5HCsk+08loR95uWJCe/mjHaIMtpjNHvE1WQyip9QZoInQONyH+N07I0N8t/vrgb4\nEuEQPbn3xRgbDdSBb/WTZ8vTAm1rr8UoDC2+bFNqehhqT3vSscGpbyCmBloNjdTH\nU5fwvR1p1UYejPiCbu/t3G6jIbaOX6lUcmKdNOQsB70ZIzmXWlCHIi5fdGEckMQr\nEo1P+/2je+AY1eu/SDCe7iKclimCsyQJw1+q05ps+NjJE9XUZH5r4GzeVw8vY/yA\nayoEY2rLFC8fD8e/eMF17oxn2ZMIaB8ZNI6peLaB5ckfO44ECSQzDoM72In+vuai\nQQIDAQAB\n-----END PUBLIC KEY-----\n").decrypt();
 
 // ============================================================
 // 服务器连接配置结束
