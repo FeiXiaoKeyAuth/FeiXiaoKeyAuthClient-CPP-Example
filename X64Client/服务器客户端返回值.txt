@@ -8,7 +8,6 @@ hwid mismatch = 当前卡密已绑定其他设备
 expired = 当前卡密已过期
 
 
-
 客户端心跳 返回数据
 author expired = 服务已暂停，作者账号授权已到期
 invalid encrypted request = 请求验证失败，请重新启动客户端
