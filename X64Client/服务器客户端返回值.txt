@@ -1,0 +1,27 @@
+客户端登录 返回数据
+maintenance = 软件当前处于维护模式，请稍后再试
+service suspended (author expired) = 服务已暂停，作者授权已到期
+invalid encrypted request = 请求验证失败，请重新启动客户端
+hwid banned = 当前设备已被封禁
+license banned = 当前卡密已被封禁
+hwid mismatch = 当前卡密已绑定其他设备
+expired = 当前卡密已过期
+
+
+
+客户端心跳 返回数据
+author expired = 服务已暂停，作者账号授权已到期
+invalid encrypted request = 请求验证失败，请重新启动客户端
+maintenance = 软件当前处于维护模式
+session timeout = 会话已超时，请重新登录
+invalid session data = 会话数据无效，请重新登录
+invalid token = 身份验证失败，请重新登录
+author banned = 作者账号已被禁用，服务不可用
+license banned = 当前卡密已被封禁
+session update failed = 会话更新失败，请重新登录
+expired = 当前卡密已过期
+
+获取远程变量 返回数据
+invalid encrypted request = 请求验证失败
+session timeout or invalid = 会话已失效，请重新登录
+variable not found = 未找到指定变量
