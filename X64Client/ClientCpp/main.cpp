@@ -799,6 +799,85 @@ namespace KeyAuth
         return true;
     }
 
+
+    // 获取软件公告/状态
+    bool GetSoftwareInfo()
+    {
+        VMProtectBegin("GetSoftwareInfo");
+        std::cout << "   " << std::string(30, '-') << "\n"; //使用--------分割开
+        json req = json::object();
+        json res = send_request("/api/client/get_announcement", req);
+
+        if (res.is_null())
+        {
+            VMProtectEnd();
+            return false;
+        }
+
+        // 软件开启维护状态
+        if (res.contains("maintenance") && res["maintenance"].get<bool>() == true)
+        {
+            std::cout << skCrypt("   [状态] 服务器正在维护中，无法登录！\n").decrypt();
+        }
+
+        // 显示公告
+        if (res.contains("announcement"))
+        {
+            std::string ann = res["announcement"].get<std::string>();
+            if (!ann.empty()) {
+                std::cout << skCrypt("   [公告] ").decrypt()
+                    << Tools::Text::utf8_to_gbk(ann) << "\n";
+            }
+        }
+
+        // 版本检测
+        if (res.contains("latest_version"))
+        {
+            std::string cloudVer = res["latest_version"].get<std::string>();
+            if (!cloudVer.empty() && cloudVer != VERSION)
+            {
+                std::cout << skCrypt("   [更新] 发现新版本！请更新客户端！\n").decrypt();
+                std::cout << "   [更新] 当前版本：" << VERSION << "  →  最新版本：" << cloudVer << "\n";
+
+                if (res.contains("download_url")) {
+                    std::cout << "   [更新] 下载链接： " << res["download_url"].get<std::string>() << "\n";
+                }
+            }
+        }
+
+        std::cout << "   " << std::string(30, '-') << "\n";//使用--------分割开
+
+        VMProtectEnd();
+        return true;
+    }
+
+    // 自助解绑
+    bool Unbind(const std::string& license)
+    {
+        VMProtectBegin("Unbind");
+
+        json req = {
+            {"license", license}
+        };
+
+        json res = send_request("/api/client/unbind", req);
+        if (res.is_null())
+        {
+            VMProtectEnd();
+            return false;
+        }
+
+        std::string msg = "解绑指令已发送";
+        if (res.contains("message")) {
+            msg = res["message"].get<std::string>();
+        }
+        // 如果服务器返回了 success 或 message 字段
+        std::cout << skCrypt("   [解绑] ").decrypt() << Tools::Text::utf8_to_gbk(msg) << "\n";
+
+        VMProtectEnd();
+        return true;
+    }
+
     // 心跳
     int Heartbeat()
     {
@@ -934,50 +1013,92 @@ int main()
 {
     KeyAuth::Init();
 
-    std::cout << skCrypt("   [验证] 请输入卡密：").decrypt();
 
-    std::string key_gbk;
-    std::getline(std::cin, key_gbk);
+    // 获取软件公告
+    KeyAuth::GetSoftwareInfo();
 
-    std::string key_utf8 = Tools::Text::gbk_to_utf8(key_gbk);
-
-    //仅演示反调试，实际项目请根据需要自行调整反调试策略，并且自行完善反调试逻辑 
-    if (Tools::AntiDebug::Check()) {
-        Tools::AntiDebug::SecureAbort();
-        return 0;
+    // 获取无需登录的变量
+    std::string pre_login_var = KeyAuth::GetVar("test233");
+    if (!pre_login_var.empty()) {
+        std::cout << skCrypt("   [远程变量(未登录)] = ").decrypt()
+            << Tools::Text::utf8_to_gbk(pre_login_var) << "\n";
     }
 
-    if (KeyAuth::Login(key_utf8))
-    {
-        std::string var_value_utf8 = KeyAuth::GetVar("test");//修改为你后台创建的变量名 请使用非中文防止编码问题
+    std::cout << skCrypt("   [1] 登录验证\n").decrypt();
+    std::cout << skCrypt("   [2] 自助解绑\n").decrypt();
+    std::cout << "   " << std::string(30, '-') << "\n";
+    std::cout << skCrypt("   请选择功能: ").decrypt();
 
-        if (var_value_utf8.empty()) {
-            std::cout << skCrypt("   [远程变量] 获取失败.\n").decrypt();
+    std::string choice;
+    std::getline(std::cin, choice);
+
+    if (choice == "2")
+    {
+        std::cout << skCrypt("   [解绑] 请输入要解绑的卡密：").decrypt();
+        std::string key_gbk;
+        std::getline(std::cin, key_gbk);
+        std::string key_utf8 = Tools::Text::gbk_to_utf8(key_gbk);
+
+        if (KeyAuth::Unbind(key_utf8)) {
+            std::cout << skCrypt("   [解绑] 操作成功。\n").decrypt();
         }
         else {
-            std::string var_show = Tools::Text::utf8_to_gbk(var_value_utf8);
-            std::cout << skCrypt("   [远程变量] 变量 =  ").decrypt() << var_show << "\n";
+            std::cout << skCrypt("   [解绑] 解绑失败。\n").decrypt();
         }
 
-        //  此处仅演示在独立线程里做心跳：
-
-        //  实际项目建议把心跳逻辑合并到主循环 / 业务线程中
-
-        //  避免心跳线程被单独挂起调试。
-
-		//  心跳间隔建议设置为 30 秒以上，防止被Cloudflare拉黑。
-        KeyAuth::StartKeepAlive(30000);
-
-        std::cout << skCrypt("   [验证] 按下回车退出...\n").decrypt();
+        std::cout << skCrypt("   按回车退出...\n").decrypt();
         std::cin.get();
-
-        KeyAuth::StopKeepAlive();
     }
     else
     {
-        std::cout << skCrypt("   [验证] 登录失败。\n").decrypt();
-    }
 
+        std::cout << skCrypt("   [验证] 请输入卡密：").decrypt();
+
+        std::string key_gbk;
+        std::getline(std::cin, key_gbk);
+
+        std::string key_utf8 = Tools::Text::gbk_to_utf8(key_gbk);
+
+        //仅演示反调试，实际项目请根据需要自行调整反调试策略，并且自行完善反调试逻辑 
+        if (Tools::AntiDebug::Check()) {
+            Tools::AntiDebug::SecureAbort();
+            return 0;
+        }
+
+
+
+        if (KeyAuth::Login(key_utf8))
+        {
+            std::string var_value_utf8 = KeyAuth::GetVar("2333");//修改为你后台创建的变量名 请使用非中文防止编码问题
+
+            if (var_value_utf8.empty()) {
+                std::cout << skCrypt("   [远程变量] 获取失败.\n").decrypt();
+            }
+            else {
+                std::string var_show = Tools::Text::utf8_to_gbk(var_value_utf8);
+                std::cout << skCrypt("   [远程变量] 变量 =  ").decrypt() << var_show << "\n";
+            }
+
+            //  此处仅演示在独立线程里做心跳：
+
+            //  实际项目建议把心跳逻辑合并到主循环 / 业务线程中
+
+            //  避免心跳线程被单独挂起调试。
+
+            //  心跳间隔建议设置为 30 秒以上，防止被Cloudflare拉黑。
+            KeyAuth::StartKeepAlive(30000);
+
+            std::cout << skCrypt("   [验证] 按下回车退出...\n").decrypt();
+            std::cin.get();
+
+            KeyAuth::StopKeepAlive();
+        }
+        else
+        {
+            std::cout << skCrypt("   [验证] 登录失败。\n").decrypt();
+        }
+
+    }
     system("pause");
     return 0;
 }
